@@ -1,7 +1,16 @@
-from os import environ
-from datalad.interface.base import Interface
-from datalad.interface.base import build_doc
-from datalad.interface.utils import ac
+# emacs: -*- mode: python; py-indent-offset: 4; tab-width: 4; indent-tabs-mode: nil -*-
+# ex: set sts=4 ts=4 sw=4 noet:
+# ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
+#
+#   See LICENSE file distributed along with the datalad_osf package for the
+#   copyright and license terms.
+#
+# ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
+
+from datalad.interface.base import (
+    Interface,
+    build_doc,
+)
 from datalad.support.annexrepo import AnnexRepo
 from datalad.support.param import Parameter
 from datalad.distribution.dataset import (
@@ -9,7 +18,10 @@ from datalad.distribution.dataset import (
     EnsureDataset,
     require_dataset
 )
-from datalad.interface.utils import eval_results
+from datalad.interface.utils import (
+    ac,
+    eval_results,
+)
 from datalad.support.constraints import (
     EnsureChoice,
     EnsureNone,
@@ -17,60 +29,26 @@ from datalad.support.constraints import (
 )
 from datalad.interface.results import get_status_dict
 from datalad_osf.osfclient.osfclient import OSF
-from datalad_osf.utils import create_project
-from datalad.downloaders.credentials import (
-    Token,
-    UserPassword,
+from datalad_osf.utils import (
+    create_project,
+    get_credentials,
 )
-
-
-def _get_credentials():
-    """helper to read credentials
-
-    for now go w/ env vars. can be refactored
-    to read from datalad configs, credential store, etc.
-    """
-    # check if anything need to be done still
-    if 'OSF_TOKEN' in environ or all(
-            k in environ for k in ('OSF_USERNAME', 'OSF_PASSWORD')):
-        return dict(
-            token=environ.get('OSF_TOKEN', None),
-            username=environ.get('OSF_USERNAME', None),
-            password=environ.get('OSF_USERNAME', None),
-        )
-
-    token_auth = Token(name='https://osf.io', url=None)
-    up_auth = UserPassword(name='https://osf.io', url=None)
-
-    # get auth token, form environment, or from datalad credential store
-    # if known-- we do not support first-time entry during a test run
-    token = environ.get(
-        'OSF_TOKEN',
-        token_auth().get('token', None) if token_auth.is_known else None)
-    username = None
-    password = None
-    if not token:
-        # now same for user/password if there was no token
-        username = environ.get(
-            'OSF_USERNAME',
-            up_auth().get('user', None) if up_auth.is_known else None)
-        password = environ.get(
-            'OSF_PASSWORD',
-            up_auth().get('password', None) if up_auth.is_known else None)
-
-    # place into environment, for now this is the only way the special remote
-    # can be supplied with credentials
-    for k, v in (('OSF_TOKEN', token),
-                 ('OSF_USERNAME', username),
-                 ('OSF_PASSWORD', password)):
-        if v:
-            environ[k] = v
-    return dict(token=token, username=username, password=password)
 
 
 @build_doc
 class CreateSiblingOSF(Interface):
     """Create a dataset representation at OSF
+
+    This will create a project on OSF and initialize
+    an osf special remote to point to it. There are two modes
+    this can operate in: 'annex' and 'export'.
+    The former uses the OSF project as a key-value store, that
+    can be used to by git-annex to copy data to and retrieve
+    data from (potentially by any clone of the original dataset).
+    The latter allows to use 'git annex export' to publish a
+    snapshot of a particular version of the dataset. Such an OSF
+    project will - in opposition to the 'annex' - be
+    human-readable.
     """
 
     result_renderer = 'tailored'
@@ -85,25 +63,25 @@ class CreateSiblingOSF(Interface):
         ),
         title=Parameter(
             args=("title",),
-            doc="""  """,
+            doc="""Title of the to-be created OSF project.""",
             constraints=EnsureStr()
         ),
-        sibling=Parameter(
-            args=("sibling",),
-            doc="""""",
+        name=Parameter(
+            args=("-s", "--name",),
+            doc="""name of the to-be initialized osf-special-remote""",
             constraints=EnsureStr()
         ),
         mode=Parameter(
             args=("--mode",),
             doc=""" """,
-            constraints=EnsureChoice("annexstore", "exporttree")
+            constraints=EnsureChoice("annex", "export")
         )
     )
 
     @staticmethod
     @datasetmethod(name='create_sibling_osf')
     @eval_results
-    def __call__(title, sibling, dataset=None, mode="annexstore"):
+    def __call__(title, name="osf", dataset=None, mode="annex"):
         ds = require_dataset(dataset,
                              purpose="create OSF remote",
                              check_installed=True)
@@ -138,7 +116,7 @@ class CreateSiblingOSF(Interface):
 
         # - option: Make public!
 
-        cred = _get_credentials()
+        cred = get_credentials(allow_interactive=True)
         osf = OSF(**cred)
         proj_id, proj_url = create_project(osf_session=osf.session, title=title)
         yield get_status_dict(action="create-project-osf",
@@ -154,10 +132,10 @@ class CreateSiblingOSF(Interface):
                      "autoenable=true",
                      "project={}".format(proj_id)]
 
-        if mode == "exporttree":
+        if mode == "export":
             init_opts += ["exporttree=yes"]
 
-        ds.repo.init_remote(sibling, options=init_opts)
+        ds.repo.init_remote(name, options=init_opts)
         # TODO: add special remote name to result?
         #       need to check w/ datalad-siblings conventions
         yield get_status_dict(action="add-sibling-osf",

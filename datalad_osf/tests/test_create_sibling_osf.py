@@ -1,3 +1,12 @@
+# emacs: -*- mode: python; py-indent-offset: 4; tab-width: 4; indent-tabs-mode: nil -*-
+# ex: set sts=4 ts=4 sw=4 noet:
+# ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
+#
+#   See LICENSE file distributed along with the datalad_osf package for the
+#   copyright and license terms.
+#
+# ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
+
 from datalad.api import (
     Dataset,
 )
@@ -6,12 +15,15 @@ from datalad.tests.utils import (
     assert_in,
     assert_not_in,
     assert_result_count,
+    skip_if,
     SkipTest,
     with_tree
 )
 from datalad.utils import Path
-from datalad_osf.utils import delete_project
-from datalad_osf.create_sibling_osf import _get_credentials
+from datalad_osf.utils import (
+    delete_project,
+    get_credentials,
+)
 from datalad_osf.osfclient.osfclient import OSF
 
 
@@ -30,6 +42,7 @@ def test_invalid_calls(path):
     raise SkipTest("TODO")
 
 
+@skip_if(cond=not any(get_credentials().values()), msg='no OSF credentials')
 @with_tree(tree=minimal_repo)
 def test_create_osf_simple(path):
 
@@ -39,7 +52,7 @@ def test_create_osf_simple(path):
     file1 = Path('ds') / "file1.txt"
 
     create_results = ds.create_sibling_osf(title="CI dl-create",
-                                           sibling="osf-storage")
+                                           name="osf-storage")
 
     assert_result_count(create_results, 2, status='ok', type='dataset')
 
@@ -73,11 +86,12 @@ def test_create_osf_simple(path):
         assert_in(here, whereis)
     finally:
         # clean remote end:
-        cred = _get_credentials()
+        cred = get_credentials(allow_interactive=False)
         osf = OSF(**cred)
         delete_project(osf.session, create_results[0]['id'])
 
 
+@skip_if(cond=not any(get_credentials().values()), msg='no OSF credentials')
 @with_tree(tree=minimal_repo)
 def test_create_osf_export(path):
 
@@ -85,8 +99,8 @@ def test_create_osf_export(path):
     ds.save()
 
     create_results = ds.create_sibling_osf(title="CI dl-create",
-                                           sibling="osf-storage",
-                                           mode="exporttree")
+                                           name="osf-storage",
+                                           mode="export")
 
     assert_result_count(create_results, 2, status='ok', type='dataset')
 
@@ -99,11 +113,12 @@ def test_create_osf_export(path):
 
     finally:
         # clean remote end:
-        cred = _get_credentials()
+        cred = get_credentials(allow_interactive=False)
         osf = OSF(**cred)
         delete_project(osf.session, create_results[0]['id'])
 
 
+@skip_if(cond=not any(get_credentials().values()), msg='no OSF credentials')
 def test_create_osf_existing():
 
     raise SkipTest("TODO")

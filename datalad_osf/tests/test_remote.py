@@ -2,12 +2,11 @@
 # ex: set sts=4 ts=4 sw=4 noet:
 # ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
 #
-#   See COPYING file distributed along with the datalad package for the
+#   See LICENSE file distributed along with the datalad_osf package for the
 #   copyright and license terms.
 #
 # ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
 
-import logging
 from datalad.api import (
     Dataset,
 )
@@ -15,8 +14,14 @@ from datalad.utils import Path
 from datalad.tests.utils import (
     with_tempfile,
     skip_if_on_windows,
+    skip_if,
 )
-from datalad_osf.tests.utils import with_project
+from datalad_osf.tests.utils import (
+    with_project,
+)
+from datalad_osf.utils import (
+    get_credentials,
+)
 
 common_init_opts = ["encryption=none", "type=external", "externaltype=osf",
                     "autoenable=true"]
@@ -26,6 +31,7 @@ common_init_opts = ["encryption=none", "type=external", "externaltype=osf",
 # remote. It might just be that the SHA256 key paths get too long
 # https://github.com/datalad/datalad-osf/issues/71
 @skip_if_on_windows
+@skip_if(cond=not any(get_credentials().values()), msg='no OSF credentials')
 @with_project(title="CI osf-special-remote")
 @with_tempfile
 def test_gitannex(osf_id, dspath):

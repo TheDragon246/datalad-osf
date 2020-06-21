@@ -1,4 +1,18 @@
+# emacs: -*- mode: python; py-indent-offset: 4; tab-width: 4; indent-tabs-mode: nil -*-
+# ex: set sts=4 ts=4 sw=4 noet:
+# ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
+#
+#   See LICENSE file distributed along with the datalad_osf package for the
+#   copyright and license terms.
+#
+# ## ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
+
 import json
+from os import environ
+from datalad.downloaders.credentials import (
+    Token,
+    UserPassword,
+)
 
 
 # Note: This should ultimately go into osfclient
@@ -90,3 +104,42 @@ def initialize_osf_remote(remote, project,
 
     import subprocess
     subprocess.run(["git", "annex", "initremote", remote] + init_opts)
+
+
+def get_credentials(allow_interactive=True):
+    # prefer the environment
+    if 'OSF_TOKEN' in environ or all(
+            k in environ for k in ('OSF_USERNAME', 'OSF_PASSWORD')):
+        return dict(
+            token=environ.get('OSF_TOKEN', None),
+            username=environ.get('OSF_USERNAME', None),
+            password=environ.get('OSF_USERNAME', None),
+        )
+
+    # fall back on DataLad credential manager
+    token_auth = Token(name='https://osf.io', url=None)
+    up_auth = UserPassword(name='https://osf.io', url=None)
+
+    # get auth token, form environment, or from datalad credential store
+    # if known-- we do not support first-time entry during a test run
+    token = environ.get(
+        'OSF_TOKEN',
+        token_auth().get('token', None)
+        if allow_interactive or token_auth.is_known
+        else None)
+    username = None
+    password = None
+    if not token:
+        # now same for user/password if there was no token
+        username = environ.get(
+            'OSF_USERNAME',
+            up_auth().get('user', None)
+            if allow_interactive or up_auth.is_known
+            else None)
+        password = environ.get(
+            'OSF_PASSWORD',
+            up_auth().get('password', None)
+            if allow_interactive or up_auth.is_known
+            else None)
+
+    return dict(token=token, username=username, password=password)
